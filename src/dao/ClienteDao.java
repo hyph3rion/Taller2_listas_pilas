@@ -9,6 +9,7 @@ import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import model.Cliente;
 
@@ -84,5 +85,17 @@ public class ClienteDao {
 
 	public List<Cliente> listarTodos() {
 		return new ArrayList<>(mapaClientes.values());
+	}
+
+	public List<Cliente> listarUrgentes() {
+		return mapaClientes.values().stream()
+				.filter(Cliente::isUrgente)
+				.collect(Collectors.toList());
+	}
+
+	public List<Cliente> listarExtraccionesUrgentes() {
+		return mapaClientes.values().stream()
+				.filter(c -> c.esExtraccion() && c.isUrgente())
+				.collect(Collectors.toList());
 	}
 }

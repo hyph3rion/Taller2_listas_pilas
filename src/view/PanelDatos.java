@@ -15,6 +15,7 @@ import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.awt.LayoutManager;
 import java.util.Date;
+import model.Cliente;
 
 public class PanelDatos extends JPanel{
 	
@@ -82,14 +83,14 @@ public class PanelDatos extends JPanel{
 		
 		
 		//Client Type(Object reference)
-		tipoDeClienteL = new JLabel("Seleccione una opción: ");
+		tipoDeClienteL = new JLabel("Tipo de Cliente: ");
 		add(tipoDeClienteL);
 		String[] opciones = {"Particular", "EPS", "Prepagada"};
 		tipoDeClienteC = new JComboBox<>(opciones);
 		add(tipoDeClienteC);
 		
 		//tipo de atencion
-		tipoDeAtencionL = new JLabel("Seleccione una opción: ");
+		tipoDeAtencionL = new JLabel("Procedimiento Odontológico: ");
 		add(tipoDeAtencionL);
 		
 		// radio button components initialization
@@ -121,14 +122,14 @@ public class PanelDatos extends JPanel{
 		add(panelRadio);
 		
 		//prioridad atencion
-		prioridadAtencionL = new JLabel("Seleccione una opción: ");
+		prioridadAtencionL = new JLabel("Prioridad de Atención: ");
 		add(prioridadAtencionL);
 		
 		String[] opcionesPrioridadAtencion = {"Normal", "Urgente"};
 		prioridadAtencionC = new JComboBox<>(opcionesPrioridadAtencion);
 		add(prioridadAtencionC);
 		
-		fechaCitaL = new JLabel("Seleccione una fecha valida: ");
+		fechaCitaL = new JLabel("Fecha de la Cita: ");
 		add(fechaCitaL);
 		SpinnerDateModel modeloFecha = new SpinnerDateModel();
 		fechaCitaS = new JSpinner(modeloFecha);
@@ -289,5 +290,40 @@ public class PanelDatos extends JPanel{
 
 	public void setPrioridadAtencionC(JComboBox<String> prioridadAtencionC) {
 		this.prioridadAtencionC = prioridadAtencionC;
+	}
+
+	public void cargarDatosPaciente(Cliente c) {
+		if (c == null) return;
+		cedulaF.setText(String.valueOf(c.getCedula()));
+		nombreF.setText(c.getNombre() != null ? c.getNombre() : "");
+		telefonoF.setText(String.valueOf(c.getTelefono()));
+		cantidadF.setText(String.valueOf(c.getCantidad()));
+		if (c.getTipoDeCliente() != null && c.getTipoDeCliente().length > 0) {
+			tipoDeClienteC.setSelectedItem(c.getTipoDeCliente()[0]);
+		}
+		if (!c.getTipoDeAtencion().isEmpty()) {
+			String proc = c.getTipoDeAtencion().get(0);
+			if ("Calzas".equalsIgnoreCase(proc)) rbCalzas.setSelected(true);
+			else if ("Limpieza".equalsIgnoreCase(proc)) rbLimpieza.setSelected(true);
+			else if ("Extraccion".equalsIgnoreCase(proc)) rbExtraccion.setSelected(true);
+			else rbDiagnostico.setSelected(true);
+		}
+		if (c.getPrioridadAtencion() != null && c.getPrioridadAtencion().length > 0) {
+			prioridadAtencionC.setSelectedItem(c.getPrioridadAtencion()[0]);
+		}
+		if (c.getFechaCita() != null) {
+			fechaCitaS.setValue(c.getFechaCita());
+		}
+	}
+
+	public void limpiarFormulario() {
+		cedulaF.setText("");
+		nombreF.setText("");
+		telefonoF.setText("");
+		cantidadF.setText("1");
+		tipoDeClienteC.setSelectedIndex(0);
+		rbDiagnostico.setSelected(true);
+		prioridadAtencionC.setSelectedIndex(0);
+		fechaCitaS.setValue(new Date());
 	}
 }

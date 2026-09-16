@@ -92,6 +92,30 @@ public class Cliente implements Serializable {
 	this.fechaCita = fechaCita;
  }
 
+ public boolean isUrgente() {
+	return prioridadAtencion != null && prioridadAtencion.length > 0 
+			&& "Urgente".equalsIgnoreCase(prioridadAtencion[0]);
+ }
+
+ public String getPrioridad() {
+	if (prioridadAtencion != null && prioridadAtencion.length > 0) {
+		return prioridadAtencion[0];
+	}
+	return "Normal";
+ }
+
+ public void setPrioridad(String prioridad) {
+	this.prioridadAtencion = new String[] { prioridad };
+ }
+
+ public boolean esExtraccion() {
+	if (tipoDeAtencion == null || tipoDeAtencion.isEmpty()) {
+		return false;
+	}
+	String tipo = tipoDeAtencion.get(0).trim().toLowerCase();
+	return tipo.contains("extracc") || tipo.equals("extraccion") || tipo.equals("extracción");
+ }
+
  @Override
  public String toString() {
 	return "Cliente [cedula=" + cedula + ", nombre=" + nombre + ", telefono=" + telefono + ", tipoDeCliente="
