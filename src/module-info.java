@@ -1,3 +1,3 @@
-module ActividadIndividual1 {
+module ActividadIndividual2 {
 	requires java.desktop;
 }
