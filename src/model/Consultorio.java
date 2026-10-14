@@ -82,6 +82,9 @@ public class Consultorio implements Serializable {
 		if (colaCitas.contains(codigoCita)) {
 			return;
 		}
+		if (cliente == null || !cliente.esExtraccion()) {
+			return;
+		}
 		colaCitas.add(codigoCita);
 	}
 

@@ -29,7 +29,7 @@ public class GestionAgendaDiaria {
         String dia = formatoDia.format(fechaAgenda);
         List<Cliente> agenda = new ArrayList<>();
         for (Cliente c : clientes) {
-            if (c != null && c.getFechaCita() != null && formatoDia.format(c.getFechaCita()).equals(dia)) {
+            if (c != null && c.esExtraccion() && c.getFechaCita() != null && formatoDia.format(c.getFechaCita()).equals(dia)) {
                 agenda.add(c);
             }
         }

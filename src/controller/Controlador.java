@@ -141,8 +141,7 @@ public class Controlador implements ActionListener {
                     Cliente pac = clienteCrud.buscarPaciente(ced);
                     if (pac != null) {
                         pc.getComboPrioridadCita().setSelectedItem(pac.getPrioridad());
-                        String proc = (!pac.getTipoDeAtencion().isEmpty()) ? pac.getTipoDeAtencion().get(0) : "Diagnostico";
-                        pc.getComboProcedimientoCita().setSelectedItem(proc);
+                        pc.getComboProcedimientoCita().setSelectedItem("Extraccion");
                         if (pac.getFechaCita() != null) {
                             pc.getFechaCitaSpinner().setValue(pac.getFechaCita());
                         }
@@ -534,8 +533,10 @@ public class Controlador implements ActionListener {
                         ? paciente.getTipoDeCliente()[0]
                         : "Particular";
                 String tAtencion = (String) pc.getComboProcedimientoCita().getSelectedItem();
-                if (tAtencion == null || tAtencion.isEmpty()) {
-                    tAtencion = (!paciente.getTipoDeAtencion().isEmpty()) ? paciente.getTipoDeAtencion().get(0) : "Diagnostico";
+                if (tAtencion == null || !tAtencion.toLowerCase().contains("extrac")) {
+                    JOptionPane.showMessageDialog(vista, "Solo se pueden agendar citas para extracciones dentales.", "Aviso",
+                            JOptionPane.WARNING_MESSAGE);
+                    return;
                 }
                 String prioridad = (String) pc.getComboPrioridadCita().getSelectedItem();
                 if (prioridad == null || prioridad.isEmpty()) {
@@ -1118,6 +1119,11 @@ public class Controlador implements ActionListener {
 
         String prioridad = (String) pc.getComboPrioridadCita().getSelectedItem();
         String procedimiento = (String) pc.getComboProcedimientoCita().getSelectedItem();
+        if (procedimiento == null || !procedimiento.toLowerCase().contains("extrac")) {
+            JOptionPane.showMessageDialog(vista, "Solo se pueden agendar citas para extracciones dentales.", "Aviso",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
         Date fecha = (Date) pc.getFechaCitaSpinner().getValue();
 
         ArrayList<String> atencionCita = new ArrayList<>();
@@ -1628,9 +1634,7 @@ public class Controlador implements ActionListener {
             Cliente pac = clienteCrud.buscarPaciente(ced);
             if (pac != null) {
                 pc.getComboPrioridadCita().setSelectedItem(pac.getPrioridad());
-                String proc = (pac.getTipoDeAtencion() != null && !pac.getTipoDeAtencion().isEmpty())
-                        ? pac.getTipoDeAtencion().get(0) : "Diagnostico";
-                pc.getComboProcedimientoCita().setSelectedItem(proc);
+                pc.getComboProcedimientoCita().setSelectedItem("Extraccion");
                 if (pac.getFechaCita() != null) {
                     pc.getFechaCitaSpinner().setValue(pac.getFechaCita());
                 }

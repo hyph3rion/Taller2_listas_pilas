@@ -160,7 +160,7 @@ public class PanelConsultas extends JPanel {
         comboPrioridadCita = new JComboBox<>(new String[]{"Normal", "Urgente"});
 
         procedimientoCitaL = new JLabel("Procedimiento:");
-        comboProcedimientoCita = new JComboBox<>(new String[]{"Extraccion", "Calzas", "Limpieza", "Diagnostico"});
+        comboProcedimientoCita = new JComboBox<>(new String[]{"Extraccion"});
 
         fechaCitaL = new JLabel("Fecha / Hora Cita:");
         SpinnerDateModel modeloFecha = new SpinnerDateModel();
