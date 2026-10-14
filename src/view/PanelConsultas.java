@@ -161,6 +161,8 @@ public class PanelConsultas extends JPanel {
 
         procedimientoCitaL = new JLabel("Procedimiento:");
         comboProcedimientoCita = new JComboBox<>(new String[]{"Extraccion"});
+        comboProcedimientoCita.setEnabled(false);
+        comboProcedimientoCita.setToolTipText("El consultorio odontológico únicamente atiende extracciones dentales.");
 
         fechaCitaL = new JLabel("Fecha / Hora Cita:");
         SpinnerDateModel modeloFecha = new SpinnerDateModel();
@@ -298,10 +300,12 @@ public class PanelConsultas extends JPanel {
         comboCitasExistentes.addItem("[Seleccionar cita existente...]");
         if (cons != null && cons.getConsultas() != null) {
             cons.getConsultas().forEach((codigo, cli) -> {
-                String nom = cli != null ? cli.getNombre() : "N/A";
-                String atenc = (cli != null && !cli.getTipoDeAtencion().isEmpty()) ? cli.getTipoDeAtencion().get(0) : "Diag";
-                String prio = (cli != null && cli.getPrioridad() != null) ? cli.getPrioridad() : "Normal";
-                comboCitasExistentes.addItem(codigo + " - " + nom + " (" + atenc + " - " + prio + ")");
+                if (cli != null && cli.esExtraccion()) {
+                    String nom = cli.getNombre() != null ? cli.getNombre() : "N/A";
+                    String atenc = !cli.getTipoDeAtencion().isEmpty() ? cli.getTipoDeAtencion().get(0) : "Extraccion";
+                    String prio = cli.getPrioridad() != null ? cli.getPrioridad() : "Normal";
+                    comboCitasExistentes.addItem(codigo + " - " + nom + " (" + atenc + " - " + prio + ")");
+                }
             });
         }
     }
@@ -312,8 +316,10 @@ public class PanelConsultas extends JPanel {
         comboPacientesRegistrados.addItem("[Seleccionar paciente registrado...]");
         if (pacientes != null) {
             for (Cliente c : pacientes) {
-                String atenc = !c.getTipoDeAtencion().isEmpty() ? c.getTipoDeAtencion().get(0) : "Diagnostico";
-                comboPacientesRegistrados.addItem(c.getCedula() + " - " + c.getNombre() + " (" + atenc + " - " + c.getPrioridad() + ")");
+                if (c != null && c.esExtraccion()) {
+                    String atenc = !c.getTipoDeAtencion().isEmpty() ? c.getTipoDeAtencion().get(0) : "Extraccion";
+                    comboPacientesRegistrados.addItem(c.getCedula() + " - " + c.getNombre() + " (" + atenc + " - " + c.getPrioridad() + ")");
+                }
             }
         }
         if (prev != null) {

@@ -68,6 +68,12 @@ public class Consultorio implements Serializable {
 		if (colaCitas == null) {
 			colaCitas = new ArrayList<String>();
 		}
+		if (consultas != null && !colaCitas.isEmpty()) {
+			colaCitas.removeIf(cod -> {
+				Cliente cli = consultas.get(cod);
+				return cli != null && !cli.esExtraccion();
+			});
+		}
 		return colaCitas;
 	}
 

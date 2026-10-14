@@ -98,7 +98,14 @@ public class PanelDatos extends JPanel{
 		rbLimpieza = new JRadioButton("Limpieza");
 		rbExtraccion = new JRadioButton("Extraccion");
 		rbDiagnostico = new JRadioButton("Diagnostico");
-		//radio button action listener assigner
+		rbCalzas.setEnabled(false);
+		rbLimpieza.setEnabled(false);
+		rbDiagnostico.setEnabled(false);
+		rbCalzas.setToolTipText("El consultorio únicamente atiende extracciones dentales.");
+		rbLimpieza.setToolTipText("El consultorio únicamente atiende extracciones dentales.");
+		rbDiagnostico.setToolTipText("El consultorio únicamente atiende extracciones dentales.");
+		rbExtraccion.setSelected(true);
+		cantidadF.setEditable(true);
 		rbCalzas.addActionListener(radioListener);
 		rbLimpieza.addActionListener(radioListener);
 		rbExtraccion.addActionListener(radioListener);
@@ -301,13 +308,7 @@ public class PanelDatos extends JPanel{
 		if (c.getTipoDeCliente() != null && c.getTipoDeCliente().length > 0) {
 			tipoDeClienteC.setSelectedItem(c.getTipoDeCliente()[0]);
 		}
-		if (!c.getTipoDeAtencion().isEmpty()) {
-			String proc = c.getTipoDeAtencion().get(0);
-			if ("Calzas".equalsIgnoreCase(proc)) rbCalzas.setSelected(true);
-			else if ("Limpieza".equalsIgnoreCase(proc)) rbLimpieza.setSelected(true);
-			else if ("Extraccion".equalsIgnoreCase(proc)) rbExtraccion.setSelected(true);
-			else rbDiagnostico.setSelected(true);
-		}
+		rbExtraccion.setSelected(true);
 		if (c.getPrioridadAtencion() != null && c.getPrioridadAtencion().length > 0) {
 			prioridadAtencionC.setSelectedItem(c.getPrioridadAtencion()[0]);
 		}
@@ -322,7 +323,7 @@ public class PanelDatos extends JPanel{
 		telefonoF.setText("");
 		cantidadF.setText("1");
 		tipoDeClienteC.setSelectedIndex(0);
-		rbDiagnostico.setSelected(true);
+		rbExtraccion.setSelected(true);
 		prioridadAtencionC.setSelectedIndex(0);
 		fechaCitaS.setValue(new Date());
 	}

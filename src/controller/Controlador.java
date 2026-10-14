@@ -140,6 +140,11 @@ public class Controlador implements ActionListener {
                     pc.getCedulaPacienteCitaF().setText(String.valueOf(ced));
                     Cliente pac = clienteCrud.buscarPaciente(ced);
                     if (pac != null) {
+                        if (!pac.esExtraccion()) {
+                            JOptionPane.showMessageDialog(vista, "El paciente " + pac.getNombre() + " no tiene asignado procedimiento de extracción. El consultorio solo atiende extracciones dentales.", "Aviso", JOptionPane.WARNING_MESSAGE);
+                            pc.limpiarFormularioCita();
+                            return;
+                        }
                         pc.getComboPrioridadCita().setSelectedItem(pac.getPrioridad());
                         pc.getComboProcedimientoCita().setSelectedItem("Extraccion");
                         if (pac.getFechaCita() != null) {
@@ -510,6 +515,12 @@ public class Controlador implements ActionListener {
                             "Error", JOptionPane.ERROR_MESSAGE);
                     return;
                 }
+                if (!paciente.esExtraccion()) {
+                    JOptionPane.showMessageDialog(vista,
+                            "El paciente " + paciente.getNombre() + " no tiene registrado procedimiento de extracción. El consultorio solo atiende extracciones dentales.",
+                            "Cita Rechazada", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
 
                 // Doctor assignment selection
                 Doctor doctorAsignado = null;
@@ -706,6 +717,14 @@ public class Controlador implements ActionListener {
                     "Aviso", JOptionPane.WARNING_MESSAGE);
             return;
         }
+        if (!pd.getRbExtraccion().isSelected()) {
+            JOptionPane.showMessageDialog(vista,
+                    "Procedimiento rechazado: El consultorio únicamente atiende procedimientos de extracción dental.\nNo se permite registrar pacientes para otros procedimientos.",
+                    "Procedimiento No Permitido", JOptionPane.WARNING_MESSAGE);
+            pd.getRbExtraccion().setSelected(true);
+            return;
+        }
+
         try {
             int cedula = Integer.parseInt(pd.getCedulaF().getText().trim());
             String nombre = pd.getNombreF().getText().trim();
@@ -714,16 +733,7 @@ public class Controlador implements ActionListener {
             String[] tipoCliente = { (String) pd.getTipoDeClienteC().getSelectedItem() };
 
             ArrayList<String> tipoAtencion = new ArrayList<>();
-            if (pd.getRbCalzas().isSelected())
-                tipoAtencion.add("Calzas");
-            else if (pd.getRbLimpieza().isSelected())
-                tipoAtencion.add("Limpieza");
-            else if (pd.getRbExtraccion().isSelected())
-                tipoAtencion.add("Extraccion");
-            else if (pd.getRbDiagnostico().isSelected())
-                tipoAtencion.add("Diagnostico");
-            else
-                tipoAtencion.add("Diagnostico");
+            tipoAtencion.add("Extraccion");
 
             String[] prioridad = { (String) pd.getPrioridadAtencionC().getSelectedItem() };
             Date fecha = (Date) pd.getFechaCitaS().getValue();
@@ -822,6 +832,14 @@ public class Controlador implements ActionListener {
                     JOptionPane.WARNING_MESSAGE);
             return;
         }
+        if (!pd.getRbExtraccion().isSelected()) {
+            JOptionPane.showMessageDialog(vista,
+                    "Procedimiento rechazado: El consultorio únicamente atiende procedimientos de extracción dental.\nNo se permite asignar otros procedimientos al paciente.",
+                    "Procedimiento No Permitido", JOptionPane.WARNING_MESSAGE);
+            pd.getRbExtraccion().setSelected(true);
+            return;
+        }
+
         try {
             int cedula = Integer.parseInt(pd.getCedulaF().getText().trim());
             Cliente existente = clienteCrud.buscarPaciente(cedula);
@@ -840,16 +858,7 @@ public class Controlador implements ActionListener {
             String[] tipoCliente = { (String) pd.getTipoDeClienteC().getSelectedItem() };
 
             ArrayList<String> tipoAtencion = new ArrayList<>();
-            if (pd.getRbCalzas().isSelected())
-                tipoAtencion.add("Calzas");
-            else if (pd.getRbLimpieza().isSelected())
-                tipoAtencion.add("Limpieza");
-            else if (pd.getRbExtraccion().isSelected())
-                tipoAtencion.add("Extraccion");
-            else if (pd.getRbDiagnostico().isSelected())
-                tipoAtencion.add("Diagnostico");
-            else
-                tipoAtencion = existente.getTipoDeAtencion();
+            tipoAtencion.add("Extraccion");
 
             String[] prioridad = { (String) pd.getPrioridadAtencionC().getSelectedItem() };
             Date fecha = (Date) pd.getFechaCitaS().getValue();
@@ -1097,12 +1106,26 @@ public class Controlador implements ActionListener {
                             JOptionPane.ERROR_MESSAGE);
                     return;
                 }
+                if (!nuevoPac.esExtraccion()) {
+                    JOptionPane.showMessageDialog(vista,
+                            "Modificación rechazada: El paciente " + nuevoPac.getNombre()
+                                    + " no tiene registrado procedimiento de extracción. El consultorio solo atiende extracciones dentales.",
+                            "Cita Rechazada", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
                 pacienteActual = nuevoPac;
             } catch (NumberFormatException ex) {
                 JOptionPane.showMessageDialog(vista, "La cédula del paciente debe ser numérica.", "Error",
                         JOptionPane.ERROR_MESSAGE);
                 return;
             }
+        }
+
+        if (pacienteActual != null && !pacienteActual.esExtraccion()) {
+            JOptionPane.showMessageDialog(vista,
+                    "Modificación rechazada: El paciente no tiene registrado procedimiento de extracción dental.",
+                    "Cita Rechazada", JOptionPane.ERROR_MESSAGE);
+            return;
         }
 
         String selectedDoctor = (String) pc.getComboDoctores().getSelectedItem();
@@ -1127,7 +1150,7 @@ public class Controlador implements ActionListener {
         Date fecha = (Date) pc.getFechaCitaSpinner().getValue();
 
         ArrayList<String> atencionCita = new ArrayList<>();
-        atencionCita.add(procedimiento != null ? procedimiento : "Diagnostico");
+        atencionCita.add("Extraccion");
         String[] prioridadCita = new String[]{prioridad != null ? prioridad : "Normal"};
 
         Cliente citaModificada = new Cliente(
@@ -1302,14 +1325,37 @@ public class Controlador implements ActionListener {
             return;
         }
 
-        String codigoAtender = cons.desencolarSiguiente();
+        String codigoAtender = null;
+        Cliente cli = null;
+
+        while (!cons.getColaCitas().isEmpty()) {
+            String cod = cons.desencolarSiguiente();
+            Cliente c = cons.getConsultas().get(cod);
+            if (c == null) {
+                continue;
+            }
+            if (!c.esExtraccion()) {
+                cons.getConsultas().remove(cod);
+                consultorioCrud.actualizarConsultorio(cons);
+                JOptionPane.showMessageDialog(vista,
+                        "Atención rechazada: La cita " + cod + " del paciente " + c.getNombre()
+                                + " no corresponde a extracción dental y ha sido descartada de la cola.",
+                        "Procedimiento No Atendido", JOptionPane.WARNING_MESSAGE);
+                continue;
+            }
+            codigoAtender = cod;
+            cli = cons.getConsultas().remove(cod);
+            break;
+        }
+
         if (codigoAtender == null) {
-            JOptionPane.showMessageDialog(vista, "No hay turnos pendientes en la cola de espera de este consultorio.",
+            JOptionPane.showMessageDialog(vista, "No hay turnos pendientes de extracción en la cola de espera de este consultorio.",
                     "Cola Vacía", JOptionPane.INFORMATION_MESSAGE);
+            renderOfficeDetails(cons);
+            actualizarVistasContingenciaSilencioso();
             return;
         }
 
-        Cliente cli = cons.getConsultas().remove(codigoAtender);
         consultorioCrud.actualizarConsultorio(cons);
         this.consultorioActual = cons;
         renderOfficeDetails(cons);
@@ -1321,7 +1367,7 @@ public class Controlador implements ActionListener {
                 ? cli.getPrioridadAtencion()[0]
                 : "Normal";
         String atencion = (cli != null && !cli.getTipoDeAtencion().isEmpty()) ? cli.getTipoDeAtencion().get(0)
-                : "Diagnostico";
+                : "Extraccion";
 
         JOptionPane.showMessageDialog(vista,
                 "LLAMANDO A TURNO:\n\n"
@@ -1348,12 +1394,12 @@ public class Controlador implements ActionListener {
             int turno = 1;
             for (String cod : cons.getColaCitas()) {
                 Cliente cli = cons.getConsultas().get(cod);
-                if (cli != null) {
+                if (cli != null && cli.esExtraccion()) {
                     String prioridad = (cli.getPrioridadAtencion() != null && cli.getPrioridadAtencion().length > 0)
                             ? cli.getPrioridadAtencion()[0]
                             : "Normal";
                     String atencion = (!cli.getTipoDeAtencion().isEmpty()) ? cli.getTipoDeAtencion().get(0)
-                            : "Diagnostico";
+                            : "Extraccion";
                     String etiquetaPrioridad = "Urgente".equalsIgnoreCase(prioridad) ? "[URGENTE]" : "[Normal]";
 
                     sb.append("TURNO #").append(turno++).append(" ").append(etiquetaPrioridad).append("\n")
@@ -1497,24 +1543,26 @@ public class Controlador implements ActionListener {
         } else {
             SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm");
             cons.getConsultas().forEach((codigo, cli) -> {
-                String tCliente = cli.getTipoDeCliente() != null && cli.getTipoDeCliente().length > 0
-                        ? cli.getTipoDeCliente()[0]
-                        : "Particular";
-                String tAtencion = (!cli.getTipoDeAtencion().isEmpty()) ? cli.getTipoDeAtencion().get(0)
-                        : "Diagnostico";
-                PricingBreakdown fees = calculatePricing(tCliente, tAtencion, cli.getCantidad());
+                if (cli != null && cli.esExtraccion()) {
+                    String tCliente = cli.getTipoDeCliente() != null && cli.getTipoDeCliente().length > 0
+                            ? cli.getTipoDeCliente()[0]
+                            : "Particular";
+                    String tAtencion = (!cli.getTipoDeAtencion().isEmpty()) ? cli.getTipoDeAtencion().get(0)
+                            : "Extraccion";
+                    PricingBreakdown fees = calculatePricing(tCliente, tAtencion, cli.getCantidad());
 
-                String prioridad = cli.getPrioridad() != null ? cli.getPrioridad() : "Normal";
-                String etiquetaPrioridad = "Urgente".equalsIgnoreCase(prioridad) ? "[URGENTE]" : "[Normal]";
-                String fechaStr = cli.getFechaCita() != null ? sdf.format(cli.getFechaCita()) : "Sin fecha";
+                    String prioridad = cli.getPrioridad() != null ? cli.getPrioridad() : "Normal";
+                    String etiquetaPrioridad = "Urgente".equalsIgnoreCase(prioridad) ? "[URGENTE]" : "[Normal]";
+                    String fechaStr = cli.getFechaCita() != null ? sdf.format(cli.getFechaCita()) : "Sin fecha";
 
-                sbAppointments.append("- Cita: ").append(codigo).append(" ").append(etiquetaPrioridad)
-                        .append("\n  Paciente: ").append(cli.getNombre()).append(" (CC: ").append(cli.getCedula())
-                        .append(")\n")
-                        .append("  Tipo: ").append(tCliente).append(" | Atenc: ").append(tAtencion)
-                        .append(" | Fecha: ").append(fechaStr)
-                        .append(" | Total: $").append(String.format("%,.0f", fees.totalToPay()))
-                        .append("\n------------------------------------------------------------\n");
+                    sbAppointments.append("- Cita: ").append(codigo).append(" ").append(etiquetaPrioridad)
+                            .append("\n  Paciente: ").append(cli.getNombre()).append(" (CC: ").append(cli.getCedula())
+                            .append(")\n")
+                            .append("  Tipo: ").append(tCliente).append(" | Atenc: ").append(tAtencion)
+                            .append(" | Fecha: ").append(fechaStr)
+                            .append(" | Total: $").append(String.format("%,.0f", fees.totalToPay()))
+                            .append("\n------------------------------------------------------------\n");
+                }
             });
         }
         pc.getVistaCitasAgendadas().setText(sbAppointments.toString());
@@ -1633,6 +1681,14 @@ public class Controlador implements ActionListener {
             int ced = Integer.parseInt(cedStr);
             Cliente pac = clienteCrud.buscarPaciente(ced);
             if (pac != null) {
+                if (!pac.esExtraccion()) {
+                    JOptionPane.showMessageDialog(vista,
+                            "Cita no permitida: El paciente " + pac.getNombre() + " (CC: " + ced
+                                    + ") no tiene registrado procedimiento de extracción dental.\nEl consultorio únicamente atiende extracciones.",
+                            "Procedimiento No Permitido", JOptionPane.WARNING_MESSAGE);
+                    pc.limpiarFormularioCita();
+                    return;
+                }
                 pc.getComboPrioridadCita().setSelectedItem(pac.getPrioridad());
                 pc.getComboProcedimientoCita().setSelectedItem("Extraccion");
                 if (pac.getFechaCita() != null) {
@@ -1645,6 +1701,10 @@ public class Controlador implements ActionListener {
                         break;
                     }
                 }
+            } else {
+                JOptionPane.showMessageDialog(vista,
+                        "No se encontró ningún paciente registrado con cédula: " + ced, "Paciente No Encontrado",
+                        JOptionPane.WARNING_MESSAGE);
             }
         } catch (NumberFormatException ignored) {
         }
