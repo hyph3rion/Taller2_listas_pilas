@@ -75,7 +75,6 @@ public class Consultorio implements Serializable {
 		this.colaCitas = colaCitas;
 	}
 
-	// Sistema de cola elegante con prioridad de atención
 	public void encolarCita(String codigoCita, Cliente cliente) {
 		if (colaCitas == null) {
 			colaCitas = new ArrayList<String>();
@@ -83,29 +82,7 @@ public class Consultorio implements Serializable {
 		if (colaCitas.contains(codigoCita)) {
 			return;
 		}
-
-		boolean esUrgente = false;
-		if (cliente != null && cliente.getPrioridadAtencion() != null && cliente.getPrioridadAtencion().length > 0) {
-			esUrgente = "Urgente".equalsIgnoreCase(cliente.getPrioridadAtencion()[0]);
-		}
-
-		if (esUrgente) {
-			// Ubicar de manera prioritaria al frente (después de las urgencias previas)
-			int indiceInsercion = 0;
-			for (String cod : colaCitas) {
-				Cliente c = consultas.get(cod);
-				if (c != null && c.getPrioridadAtencion() != null && c.getPrioridadAtencion().length > 0
-						&& "Urgente".equalsIgnoreCase(c.getPrioridadAtencion()[0])) {
-					indiceInsercion++;
-				} else {
-					break;
-				}
-			}
-			colaCitas.add(indiceInsercion, codigoCita);
-		} else {
-			// Pacientes de atención regular van al final de la cola (FIFO)
-			colaCitas.add(codigoCita);
-		}
+		colaCitas.add(codigoCita);
 	}
 
 	public String desencolarSiguiente() {

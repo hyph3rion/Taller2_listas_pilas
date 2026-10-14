@@ -112,8 +112,7 @@ public class Cliente implements Serializable {
 	if (tipoDeAtencion == null || tipoDeAtencion.isEmpty()) {
 		return false;
 	}
-	String tipo = tipoDeAtencion.get(0).trim().toLowerCase();
-	return tipo.contains("extracc") || tipo.equals("extraccion") || tipo.equals("extracción");
+	return tipoDeAtencion.get(0).trim().toLowerCase().startsWith("extracc");
  }
 
  @Override

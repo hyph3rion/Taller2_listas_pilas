@@ -1,126 +1,125 @@
 package servicios;
 
 import java.text.SimpleDateFormat;
-import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.Date;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Queue;
-import java.util.stream.Collectors;
+
+import estructuras.Cola;
 import model.Cliente;
 
 public class GestionAgendaDiaria {
 
-    private Queue<Cliente> colaAtencion = new LinkedList<>();
+    private final Cola<Cliente> colaAtencion = new Cola<>();
+    private final List<Cliente> atendidos = new ArrayList<>();
     private final SimpleDateFormat formatoDia = new SimpleDateFormat("yyyyMMdd");
     private final SimpleDateFormat formatoDiaReporte = new SimpleDateFormat("dd/MM/yyyy");
-    private String fechaAgendaReporte = null;
+    private final SimpleDateFormat formatoHora = new SimpleDateFormat("HH:mm");
+    private Date fechaAgenda;
 
-    public void cargarAgendaDelDia(List<Cliente> todosLosClientes, Date fechaObjetivo) {
-        colaAtencion.clear();
+    public void cargarAgendaDelDia(List<Cliente> clientes, Date fecha) {
+        colaAtencion.vaciar();
+        atendidos.clear();
+        fechaAgenda = fecha != null ? fecha : new Date();
 
-        if (todosLosClientes == null || todosLosClientes.isEmpty()) {
-            fechaAgendaReporte = null;
+        if (clientes == null || clientes.isEmpty()) {
             return;
         }
 
-        List<Cliente> agendaCargada;
-
-        // La cola de atención diaria (FIFO) gestiona únicamente citas regulares de calendario
-        // Las citas urgentes pertenecen al Plan de Contingencia (Pila LIFO)
-        List<Cliente> citasRegulares = todosLosClientes.stream()
-            .filter(c -> c != null && c.getFechaCita() != null)
-            .filter(c -> !c.isUrgente())
-            .collect(Collectors.toList());
-
-        if (fechaObjetivo != null) {
-            String diaCompararStr = formatoDia.format(fechaObjetivo);
-            agendaCargada = citasRegulares.stream()
-                .filter(c -> formatoDia.format(c.getFechaCita()).equals(diaCompararStr))
-                .sorted(Comparator.comparing(Cliente::getFechaCita))
-                .collect(Collectors.toList());
-            fechaAgendaReporte = formatoDiaReporte.format(fechaObjetivo);
-        } else {
-            String hoyStr = formatoDia.format(new Date());
-            List<Cliente> agendaHoy = citasRegulares.stream()
-                .filter(c -> formatoDia.format(c.getFechaCita()).equals(hoyStr))
-                .sorted(Comparator.comparing(Cliente::getFechaCita))
-                .collect(Collectors.toList());
-
-            if (!agendaHoy.isEmpty()) {
-                agendaCargada = agendaHoy;
-                fechaAgendaReporte = formatoDiaReporte.format(new Date());
-            } else {
-                agendaCargada = citasRegulares.stream()
-                    .sorted(Comparator.comparing(Cliente::getFechaCita))
-                    .collect(Collectors.toList());
-                fechaAgendaReporte = "Todas las citas regulares (Orden Cronológico)";
+        String dia = formatoDia.format(fechaAgenda);
+        List<Cliente> agenda = new ArrayList<>();
+        for (Cliente c : clientes) {
+            if (c != null && c.getFechaCita() != null && formatoDia.format(c.getFechaCita()).equals(dia)) {
+                agenda.add(c);
             }
         }
 
-        colaAtencion.addAll(agendaCargada);
+        ordenarPorHora(agenda);
+
+        for (Cliente c : agenda) {
+            colaAtencion.encolar(c);
+        }
+    }
+
+    private void ordenarPorHora(List<Cliente> lista) {
+        for (int i = 1; i < lista.size(); i++) {
+            Cliente actual = lista.get(i);
+            int j = i - 1;
+            while (j >= 0 && lista.get(j).getFechaCita().after(actual.getFechaCita())) {
+                lista.set(j + 1, lista.get(j));
+                j--;
+            }
+            lista.set(j + 1, actual);
+        }
     }
 
     public Cliente atenderSiguiente() {
-        if (colaAtencion.isEmpty()) {
-            return null;
+        Cliente atendido = colaAtencion.desencolar();
+        if (atendido != null) {
+            atendidos.add(atendido);
         }
-        return colaAtencion.poll();
+        return atendido;
     }
 
     public Cliente verSiguiente() {
-        return colaAtencion.peek();
+        return colaAtencion.verFrente();
     }
 
     public String generarReporteCola(String nombreConsultorio) {
         StringBuilder sb = new StringBuilder();
-        sb.append("================================================================================\n");
-        sb.append("           AGENDA DE ATENCION DIARIA - COLA DE TURNOS (FIFO)                   \n");
+        sb.append("==========================================================================================\n");
+        sb.append("              AGENDA DIARIA DE ATENCION - COLA DE CLIENTES\n");
         if (nombreConsultorio != null && !nombreConsultorio.trim().isEmpty()) {
-            sb.append("           Consultorio: ").append(nombreConsultorio).append("\n");
+            sb.append("              Consultorio: ").append(nombreConsultorio).append("\n");
         }
-        if (fechaAgendaReporte != null) {
-            sb.append("           Jornada: ").append(fechaAgendaReporte).append("\n");
+        if (fechaAgenda != null) {
+            sb.append("              Jornada: ").append(formatoDiaReporte.format(fechaAgenda)).append("\n");
         }
-        sb.append("================================================================================\n");
-        sb.append(String.format("%-8s %-10s %-22s %-16s %-14s %-8s\n", "TURNO", "CEDULA", "PACIENTE", "FECHA/HORA", "PROCEDIMIENTO", "PRIORIDAD"));
-        sb.append("--------------------------------------------------------------------------------\n");
+        sb.append("==========================================================================================\n");
+        sb.append(String.format("%-6s %-7s %-12s %-22s %-12s %-12s %-9s\n",
+                "TURNO", "HORA", "CEDULA", "PACIENTE", "TELEFONO", "ATENCION", "PRIORIDAD"));
+        sb.append("------------------------------------------------------------------------------------------\n");
 
-        if (colaAtencion.isEmpty()) {
-            sb.append("No hay pacientes pendientes en la cola de atencion para esta jornada.\n");
-            return sb.toString();
+        if (colaAtencion.estaVacia()) {
+            sb.append("No hay clientes pendientes en la cola de atencion para esta jornada.\n");
+        } else {
+            int turno = 1;
+            for (Cliente c : colaAtencion.recorrer()) {
+                String atencion = (c.getTipoDeAtencion() != null && !c.getTipoDeAtencion().isEmpty())
+                        ? c.getTipoDeAtencion().get(0) : "Diagnostico";
+                sb.append(String.format("%-6d %-7s %-12d %-22s %-12d %-12s %-9s\n",
+                        turno++,
+                        formatoHora.format(c.getFechaCita()),
+                        c.getCedula(),
+                        c.getNombre(),
+                        c.getTelefono(),
+                        atencion,
+                        c.getPrioridad()));
+            }
+        }
+        sb.append("==========================================================================================\n");
+        sb.append("Clientes en espera: ").append(colaAtencion.tamano()).append("\n");
+        sb.append("Clientes atendidos: ").append(atendidos.size()).append("\n");
+        if (!colaAtencion.estaVacia()) {
+            sb.append("Siguiente en ser atendido (frente): ").append(colaAtencion.verFrente().getNombre()).append("\n");
         }
 
-        SimpleDateFormat sdfHora = new SimpleDateFormat("dd/MM/yyyy HH:mm");
-        int turno = 1;
-        for (Cliente c : colaAtencion) {
-            String atencion = (c.getTipoDeAtencion() != null && !c.getTipoDeAtencion().isEmpty())
-                    ? c.getTipoDeAtencion().get(0) : "Diagnostico";
-            String fechaStr = c.getFechaCita() != null ? sdfHora.format(c.getFechaCita()) : "Sin fecha";
-
-            sb.append(String.format("Turno #%-2d %-10d %-22s %-16s %-14s %-8s\n",
-                turno++,
-                c.getCedula(),
-                c.getNombre(),
-                fechaStr,
-                atencion,
-                c.getPrioridad()
-            ));
+        if (!atendidos.isEmpty()) {
+            sb.append("\n------------------------------- CLIENTES ATENDIDOS ---------------------------------------\n");
+            int n = 1;
+            for (Cliente c : atendidos) {
+                sb.append(String.format("%-6d %-7s %-12d %-22s\n",
+                        n++, formatoHora.format(c.getFechaCita()), c.getCedula(), c.getNombre()));
+            }
         }
-        sb.append("================================================================================\n");
-        sb.append("Total pacientes en espera: ").append(colaAtencion.size()).append("\n");
         return sb.toString();
     }
 
-    public String generarReporteCola() {
-        return generarReporteCola(null);
-    }
-
-    public Queue<Cliente> getColaAtencion() {
-        return colaAtencion;
-    }
-
     public int totalEnCola() {
-        return colaAtencion.size();
+        return colaAtencion.tamano();
+    }
+
+    public int totalAtendidos() {
+        return atendidos.size();
     }
 }

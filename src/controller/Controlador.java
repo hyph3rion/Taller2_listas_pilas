@@ -13,8 +13,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
 import javax.swing.JOptionPane;
-import java.util.ArrayDeque;
-import java.util.Deque;
 
 import dao.ClienteDao;
 import dao.ConsultorioDao;
@@ -26,6 +24,7 @@ import model.ClientType;
 import model.ProcedureType;
 import model.PricingBreakdown;
 
+import estructuras.Pila;
 import servicios.GestionAgendaDiaria;
 import servicios.GestionContingencia;
 
@@ -47,11 +46,11 @@ public class Controlador implements ActionListener {
     private ConsultorioDao consultorioCrud;
     private DoctorDao doctorCrud;
 
-    // new stuff
     private GestionContingencia planContingencia;
     private GestionAgendaDiaria agendaDiaria;
-    private Deque<Cliente> pilaContingenciaActual;
+    private Pila<Cliente> pilaContingenciaActual;
     private Consultorio consultorioActual;
+    private boolean actualizandoComboContingencia = false;
 
     public Controlador() {
         this.vista = new Frame();
@@ -63,7 +62,7 @@ public class Controlador implements ActionListener {
 
         this.planContingencia = new GestionContingencia();
         this.agendaDiaria = new GestionAgendaDiaria();
-        this.pilaContingenciaActual = new ArrayDeque<>();
+        this.pilaContingenciaActual = new Pila<>();
 
         actionListeners();
 
@@ -110,7 +109,6 @@ public class Controlador implements ActionListener {
         pc.getBtnRefrescarDoctores().addActionListener(this);
         pc.getBtnLimpiarCita().addActionListener(e -> pc.limpiarFormularioCita());
 
-        // Selector dinámico de consultorios en PanelConsultas
         pc.getComboSeleccionarConsultorio().addActionListener(e -> {
             String item = (String) pc.getComboSeleccionarConsultorio().getSelectedItem();
             if (item != null && !item.isEmpty()) {
@@ -125,7 +123,6 @@ public class Controlador implements ActionListener {
             }
         });
 
-        // Selector dinámico de citas existentes en PanelConsultas
         pc.getComboCitasExistentes().addActionListener(e -> {
             String item = (String) pc.getComboCitasExistentes().getSelectedItem();
             if (item != null && !item.startsWith("[")) {
@@ -135,7 +132,6 @@ public class Controlador implements ActionListener {
             }
         });
 
-        // Selector dinámico de pacientes registrados en PanelConsultas
         pc.getComboPacientesRegistrados().addActionListener(e -> {
             String item = (String) pc.getComboPacientesRegistrados().getSelectedItem();
             if (item != null && !item.startsWith("[")) {
@@ -163,25 +159,6 @@ public class Controlador implements ActionListener {
         });
         pc.getCedulaPacienteCitaF().addActionListener(e -> autoCompletarPacienteEnFormularioCita());
 
-        // Sincronización inteligente entre prioridad y procedimiento para Contingencia (Taller 2)
-        pc.getComboPrioridadCita().addActionListener(e -> {
-            String prio = (String) pc.getComboPrioridadCita().getSelectedItem();
-            if ("Urgente".equalsIgnoreCase(prio)) {
-                String proc = (String) pc.getComboProcedimientoCita().getSelectedItem();
-                if (proc == null || !proc.toLowerCase().contains("extracc")) {
-                    pc.getComboProcedimientoCita().setSelectedItem("Extraccion");
-                }
-            }
-        });
-
-        pc.getComboProcedimientoCita().addActionListener(e -> {
-            String proc = (String) pc.getComboProcedimientoCita().getSelectedItem();
-            if (proc != null && proc.toLowerCase().contains("extracc")) {
-                pc.getComboPrioridadCita().setSelectedItem("Urgente");
-            }
-        });
-
-        // Carga dinámica en PanelDatos al digitar cédula
         vista.getPanelDatos().getCedulaF().addFocusListener(new java.awt.event.FocusAdapter() {
             @Override
             public void focusLost(java.awt.event.FocusEvent e) {
@@ -196,21 +173,22 @@ public class Controlador implements ActionListener {
         po.getEliminarRegistro().addActionListener(this);
         po.getActualizarRegistro().addActionListener(this);
 
-        // New stuff event subscription
         PanelContingencia pcont = vista.getPanelContingencia();
         pcont.getBtnGenerarPila().addActionListener(this);
         pcont.getBtnLlamarUrgencia().addActionListener(this);
+        pcont.getBtnGuardarInforme().addActionListener(this);
         pcont.getBtnCargarAgendaCola().addActionListener(this);
         pcont.getBtnAtenderTurnoCola().addActionListener(this);
         pcont.getBtnRefrescarConsultorios().addActionListener(this);
 
         pcont.getComboConsultorios().addItemListener(e -> {
-            if (e.getStateChange() == java.awt.event.ItemEvent.SELECTED) {
+            if (!actualizandoComboContingencia && e.getStateChange() == java.awt.event.ItemEvent.SELECTED) {
                 actualizarVistasContingenciaSilencioso();
             }
         });
 
-        // Sincronización viva al cambiar de pestaña
+        pcont.getFechaAgendaSpinner().addChangeListener(e -> actualizarColaSilencioso());
+
         vista.getModuloPestanas().addChangeListener(e -> {
             int idx = vista.getModuloPestanas().getSelectedIndex();
             if (idx == 0) {
@@ -228,7 +206,6 @@ public class Controlador implements ActionListener {
                 refreshDoctorComboBox();
             } else if (idx == 3) {
                 refrescarComboConsultoriosContingencia();
-                actualizarVistasContingenciaSilencioso();
             }
         });
     }
@@ -293,7 +270,7 @@ public class Controlador implements ActionListener {
             double currentFee = getClienteTotalFee(current);
             int j = i - 1;
             while (j >= 0 && getClienteTotalFee(list.get(j)) > currentFee) {
-                list.set(j + 1, list.get(i));
+                list.set(j + 1, list.get(j));
                 j--;
             }
             list.set(j + 1, current);
@@ -332,9 +309,9 @@ public class Controlador implements ActionListener {
         sb.append("============================================================\n");
         sb.append("               MÉTRICAS GENERALES DEL CONSULTORIO           \n");
         sb.append("============================================================\n");
-        sb.append(" • Total Clientes Registrados: ").append(totalClientes).append("\n");
-        sb.append(" • Ingresos Totales Recibidos: $").append(String.format("%,.0f", ingresosTotales)).append("\n");
-        sb.append(" • Clientes para Extracción de Dientes: ").append(clientesExtraccion).append("\n");
+        sb.append(" - Total Clientes Registrados: ").append(totalClientes).append("\n");
+        sb.append(" - Ingresos Totales Recibidos: $").append(String.format("%,.0f", ingresosTotales)).append("\n");
+        sb.append(" - Clientes para Extracción de Dientes: ").append(clientesExtraccion).append("\n");
         sb.append("============================================================\n");
         sb.append("  LISTA DE PACIENTES (ORDENADA POR VALOR: MAYOR A MENOR)   \n");
         sb.append("============================================================\n\n");
@@ -363,19 +340,18 @@ public class Controlador implements ActionListener {
     }
 
     public PricingBreakdown calculatePricing(String clientTypeStr, String procedureTypeStr, int quantity) {
-        // Conversión segura de String a Enum (ignora mayúsculas/minúsculas y espacios)
         ClientType clientType;
         try {
             clientType = ClientType.valueOf(clientTypeStr.trim().toUpperCase());
         } catch (Exception ex) {
-            clientType = ClientType.PARTICULAR; // Fallback por defecto
+            clientType = ClientType.PARTICULAR;
         }
 
         ProcedureType procedureType;
         try {
             procedureType = ProcedureType.valueOf(procedureTypeStr.trim().toUpperCase());
         } catch (Exception ex) {
-            procedureType = ProcedureType.DIAGNOSTICO; // Fallback por defecto
+            procedureType = ProcedureType.DIAGNOSTICO;
         }
 
         double baseFee = clientType.getBaseFee();
@@ -489,6 +465,9 @@ public class Controlador implements ActionListener {
         if (e.getSource() == pcont.getBtnLlamarUrgencia()) {
             llamarUrgenciaPila();
         }
+        if (e.getSource() == pcont.getBtnGuardarInforme()) {
+            guardarInformePila();
+        }
         if (e.getSource() == pcont.getBtnCargarAgendaCola()) {
             cargarAgendaDiariaCola();
         }
@@ -503,7 +482,6 @@ public class Controlador implements ActionListener {
         // Schedule appointment in office
         if (e.getSource() == pc.getBtnAsignarConsulta()) {
             try {
-                // 1. Validar cédula del paciente
                 if (pc.getCedulaPacienteCitaF().getText().trim().isEmpty()) {
                     JOptionPane.showMessageDialog(vista, "Complete la Cédula del Paciente o selecciónelo de la lista.",
                             "Aviso", JOptionPane.WARNING_MESSAGE);
@@ -512,7 +490,6 @@ public class Controlador implements ActionListener {
 
                 int cedula = Integer.parseInt(pc.getCedulaPacienteCitaF().getText().trim());
 
-                // 2. Resolver el consultorio automáticamente
                 Consultorio cons = buscarConsultorioPorCitaONit(null);
                 if (cons == null) {
                     JOptionPane.showMessageDialog(vista,
@@ -527,7 +504,6 @@ public class Controlador implements ActionListener {
                     pc.getCodigoCitaF().setText(codigoCita);
                 }
 
-                // 3. Buscar al paciente por su cédula
                 Cliente paciente = clienteCrud.buscarPaciente(cedula);
                 if (paciente == null) {
                     JOptionPane.showMessageDialog(vista,
@@ -564,10 +540,6 @@ public class Controlador implements ActionListener {
                 String prioridad = (String) pc.getComboPrioridadCita().getSelectedItem();
                 if (prioridad == null || prioridad.isEmpty()) {
                     prioridad = paciente.getPrioridad();
-                }
-                if ("Urgente".equalsIgnoreCase(prioridad) && !tAtencion.toLowerCase().contains("extracc")) {
-                    tAtencion = "Extraccion";
-                    pc.getComboProcedimientoCita().setSelectedItem("Extraccion");
                 }
                 Date fechaCita = (Date) pc.getFechaCitaSpinner().getValue();
                 int cant = paciente.getCantidad();
@@ -1141,10 +1113,6 @@ public class Controlador implements ActionListener {
 
         String prioridad = (String) pc.getComboPrioridadCita().getSelectedItem();
         String procedimiento = (String) pc.getComboProcedimientoCita().getSelectedItem();
-        if ("Urgente".equalsIgnoreCase(prioridad) && (procedimiento == null || !procedimiento.toLowerCase().contains("extracc"))) {
-            procedimiento = "Extraccion";
-            pc.getComboProcedimientoCita().setSelectedItem("Extraccion");
-        }
         Date fecha = (Date) pc.getFechaCitaSpinner().getValue();
 
         ArrayList<String> atencionCita = new ArrayList<>();
@@ -1274,7 +1242,7 @@ public class Controlador implements ActionListener {
         Cliente paciente = cons.getConsultas().get(codigoCita);
 
         String motivo = JOptionPane.showInputDialog(vista,
-                "⚠️ JUSTIFICACIÓN DE CANCELACIÓN (Requerida para auditoría):\n\n"
+                "JUSTIFICACIÓN DE CANCELACIÓN (Requerida para auditoría):\n\n"
                         + "Cita a cancelar: " + codigoCita + "\n"
                         + "Paciente: "
                         + (paciente != null ? paciente.getNombre() + " (CC: " + paciente.getCedula() + ")" : "N/A")
@@ -1304,7 +1272,7 @@ public class Controlador implements ActionListener {
             actualizarVistasContingenciaSilencioso();
 
             JOptionPane.showMessageDialog(vista,
-                    "✅ Consulta '" + codigoCita + "' cancelada exitosamente.\n\n"
+                    "Consulta '" + codigoCita + "' cancelada exitosamente.\n\n"
                             + "La justificación y los datos han sido archivados en el log de auditoría.",
                     "Consulta Cancelada",
                     JOptionPane.INFORMATION_MESSAGE);
@@ -1345,7 +1313,7 @@ public class Controlador implements ActionListener {
                 : "Diagnostico";
 
         JOptionPane.showMessageDialog(vista,
-                "🔔 LLAMANDO A TURNO:\n\n"
+                "LLAMANDO A TURNO:\n\n"
                         + "Código Cita: " + codigoAtender + "\n"
                         + "Paciente: " + nombrePac + " (CC: " + cedulaPac + ")\n"
                         + "Prioridad: " + prioridad + "\n"
@@ -1375,8 +1343,7 @@ public class Controlador implements ActionListener {
                             : "Normal";
                     String atencion = (!cli.getTipoDeAtencion().isEmpty()) ? cli.getTipoDeAtencion().get(0)
                             : "Diagnostico";
-                    String etiquetaPrioridad = "Urgente".equalsIgnoreCase(prioridad) ? "🚨 [URGENCIA PRIORITARIA]"
-                            : "🟢 [Normal]";
+                    String etiquetaPrioridad = "Urgente".equalsIgnoreCase(prioridad) ? "[URGENTE]" : "[Normal]";
 
                     sb.append("TURNO #").append(turno++).append(" ").append(etiquetaPrioridad).append("\n")
                             .append("  Código Cita: ").append(cod)
@@ -1435,7 +1402,6 @@ public class Controlador implements ActionListener {
 
     private Consultorio buscarConsultorioPorCitaONit(String codigoCita) {
         PanelConsultas pc = vista.getPanelConsultas();
-        // 1. Consultorio seleccionado en combo
         String item = (String) pc.getComboSeleccionarConsultorio().getSelectedItem();
         if (item != null && !item.isEmpty()) {
             try {
@@ -1447,7 +1413,6 @@ public class Controlador implements ActionListener {
             } catch (Exception ignored) {}
         }
 
-        // 2. Intentar por NIT en nitF
         String nitStr = pc.getNitF().getText().trim();
         if (!nitStr.isEmpty()) {
             try {
@@ -1460,7 +1425,6 @@ public class Controlador implements ActionListener {
             }
         }
 
-        // 3. Intentar por NIT en txtBuscarNit
         String buscarNitStr = pc.getTxtBuscarNit().getText().trim();
         if (!buscarNitStr.isEmpty()) {
             try {
@@ -1473,7 +1437,6 @@ public class Controlador implements ActionListener {
             }
         }
 
-        // 4. Buscar en todos los consultorios cuál contiene este codigoCita
         if (codigoCita != null && !codigoCita.isEmpty()) {
             for (Consultorio c : consultorioCrud.listarTodos()) {
                 if (c.getConsultas().containsKey(codigoCita)) {
@@ -1482,12 +1445,10 @@ public class Controlador implements ActionListener {
             }
         }
 
-        // 5. Consultorio actualmente activo
         if (this.consultorioActual != null) {
             return this.consultorioActual;
         }
 
-        // 6. Primer consultorio de la lista
         List<Consultorio> todos = consultorioCrud.listarTodos();
         if (!todos.isEmpty()) {
             return todos.get(0);
@@ -1533,10 +1494,10 @@ public class Controlador implements ActionListener {
                 PricingBreakdown fees = calculatePricing(tCliente, tAtencion, cli.getCantidad());
 
                 String prioridad = cli.getPrioridad() != null ? cli.getPrioridad() : "Normal";
-                String etiquetaPrioridad = "Urgente".equalsIgnoreCase(prioridad) ? "🚨 [URGENTE]" : "🟢 [Normal]";
+                String etiquetaPrioridad = "Urgente".equalsIgnoreCase(prioridad) ? "[URGENTE]" : "[Normal]";
                 String fechaStr = cli.getFechaCita() != null ? sdf.format(cli.getFechaCita()) : "Sin fecha";
 
-                sbAppointments.append("• Cita: ").append(codigo).append(" ").append(etiquetaPrioridad)
+                sbAppointments.append("- Cita: ").append(codigo).append(" ").append(etiquetaPrioridad)
                         .append("\n  Paciente: ").append(cli.getNombre()).append(" (CC: ").append(cli.getCedula())
                         .append(")\n")
                         .append("  Tipo: ").append(tCliente).append(" | Atenc: ").append(tAtencion)
@@ -1582,20 +1543,23 @@ public class Controlador implements ActionListener {
         String reportePila = planContingencia.generarReportePila(pilaContingenciaActual, origen);
         vista.getPanelContingencia().getVistaPilaReporte().setText(reportePila);
 
-        Date fechaFiltro = null;
-        if (vista.getPanelContingencia().getChkFiltrarPorFecha().isSelected()) {
-            fechaFiltro = (Date) vista.getPanelContingencia().getFechaAgendaSpinner().getValue();
-        }
-        agendaDiaria.cargarAgendaDelDia(clientes, fechaFiltro);
-        String reporteCola = agendaDiaria.generarReporteCola(origen);
+        actualizarColaSilencioso();
+    }
+
+    private void actualizarColaSilencioso() {
+        List<Cliente> clientes = obtenerListaClientesContingencia();
+        Date fecha = (Date) vista.getPanelContingencia().getFechaAgendaSpinner().getValue();
+        agendaDiaria.cargarAgendaDelDia(clientes, fecha);
+        String reporteCola = agendaDiaria.generarReporteCola(obtenerNombreOrigenContingencia());
         vista.getPanelContingencia().getVistaColaReporte().setText(reporteCola);
     }
 
     public void refrescarComboConsultoriosContingencia() {
         PanelContingencia pcont = vista.getPanelContingencia();
         Object prevSelection = pcont.getComboConsultorios().getSelectedItem();
-        pcont.getComboConsultorios().removeAllItems();
 
+        actualizandoComboContingencia = true;
+        pcont.getComboConsultorios().removeAllItems();
         List<Consultorio> consultorios = consultorioCrud.listarTodos();
         for (Consultorio c : consultorios) {
             pcont.getComboConsultorios().addItem(c.getNit() + " - " + c.getNombreConsultorio());
@@ -1606,6 +1570,12 @@ public class Controlador implements ActionListener {
             pcont.getComboConsultorios().setSelectedItem(prevSelection);
         } else if (pcont.getComboConsultorios().getItemCount() > 0) {
             pcont.getComboConsultorios().setSelectedIndex(0);
+        }
+        actualizandoComboContingencia = false;
+
+        Object nuevaSeleccion = pcont.getComboConsultorios().getSelectedItem();
+        if (prevSelection != null && !prevSelection.equals(nuevaSeleccion)) {
+            actualizarVistasContingenciaSilencioso();
         }
     }
 
@@ -1680,69 +1650,73 @@ public class Controlador implements ActionListener {
         vista.getPanelContingencia().getVistaPilaReporte().setText(reporte);
 
         JOptionPane.showMessageDialog(vista,
-                "Pila de contingencia generada exitosamente.\n"
-                        + "Origen: " + origen + "\n"
-                        + "Citas urgentes en orden prioritario (LIFO): " + pilaContingenciaActual.size(),
+                "Pila de contingencia generada.\n"
+                        + "Consultorio: " + origen + "\n"
+                        + "Clientes de extraccion urgente en la pila: " + pilaContingenciaActual.tamano(),
                 "Plan de Contingencia",
                 JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void llamarUrgenciaPila() {
-        if (pilaContingenciaActual == null || pilaContingenciaActual.isEmpty()) {
+        if (pilaContingenciaActual == null || pilaContingenciaActual.estaVacia()) {
             JOptionPane.showMessageDialog(vista,
-                    "No hay pacientes pendientes en la Pila de Urgencias.\nPresione 'Generar Pila Urgencias' para cargarla.",
-                    "Pila Vacía",
+                    "No hay clientes pendientes en la pila.\nPresione 'Generar Pila' para cargarla.",
+                    "Pila Vacia",
                     JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        Cliente prioritario = pilaContingenciaActual.pop();
+        Cliente llamado = pilaContingenciaActual.desapilar();
 
         String origen = obtenerNombreOrigenContingencia();
         vista.getPanelContingencia().getVistaPilaReporte()
                 .setText(planContingencia.generarReportePila(pilaContingenciaActual, origen));
 
         SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm");
-        String fecha = prioritario.getFechaCita() != null ? sdf.format(prioritario.getFechaCita()) : "Sin fecha";
 
         JOptionPane.showMessageDialog(vista,
-                "🚨 LLAMANDO A PACIENTE PRIORITARIO (PILA - POP):\n\n"
-                        + "Cédula: " + prioritario.getCedula() + "\n"
-                        + "Nombre: " + prioritario.getNombre() + "\n"
-                        + "Teléfono: " + prioritario.getTelefono() + "\n"
-                        + "Atención: Extracción (Urgente)\n"
-                        + "Fecha Cita: " + fecha + "\n\n"
-                        + "Urgencias pendientes en pila: " + pilaContingenciaActual.size(),
+                "LLAMANDO AL CLIENTE:\n\n"
+                        + "Cedula: " + llamado.getCedula() + "\n"
+                        + "Nombre: " + llamado.getNombre() + "\n"
+                        + "Telefono: " + llamado.getTelefono() + "\n"
+                        + "Atencion: " + llamado.getTipoDeAtencion().get(0) + "\n"
+                        + "Prioridad: " + llamado.getPrioridad() + "\n"
+                        + "Fecha Cita: " + sdf.format(llamado.getFechaCita()) + "\n\n"
+                        + "Clientes pendientes en la pila: " + pilaContingenciaActual.tamano(),
                 "Llamado Prioritario",
                 JOptionPane.INFORMATION_MESSAGE);
     }
 
-    private void cargarAgendaDiariaCola() {
-        List<Cliente> clientes = obtenerListaClientesContingencia();
-        Date fechaFiltro = null;
-        if (vista.getPanelContingencia().getChkFiltrarPorFecha().isSelected()) {
-            fechaFiltro = (Date) vista.getPanelContingencia().getFechaAgendaSpinner().getValue();
-        }
-
-        agendaDiaria.cargarAgendaDelDia(clientes, fechaFiltro);
-
+    private void guardarInformePila() {
         String origen = obtenerNombreOrigenContingencia();
-        String reporte = agendaDiaria.generarReporteCola(origen);
-        vista.getPanelContingencia().getVistaColaReporte().setText(reporte);
+        String informe = planContingencia.generarReportePila(pilaContingenciaActual, origen);
+        if (planContingencia.guardarInforme(informe)) {
+            JOptionPane.showMessageDialog(vista,
+                    "Informe guardado en: " + new File(GestionContingencia.ARCHIVO_INFORME).getAbsolutePath(),
+                    "Informe de la Pila",
+                    JOptionPane.INFORMATION_MESSAGE);
+        } else {
+            JOptionPane.showMessageDialog(vista, "No fue posible guardar el informe.", "Error",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void cargarAgendaDiariaCola() {
+        actualizarColaSilencioso();
 
         JOptionPane.showMessageDialog(vista,
-                "Agenda cargada en la Cola de Atención (FIFO).\n"
-                        + "Origen: " + origen + "\n"
-                        + "Turnos en espera: " + agendaDiaria.totalEnCola(),
-                "Agenda de Turnos",
+                "Agenda del dia generada en la cola de atencion.\n"
+                        + "Consultorio: " + obtenerNombreOrigenContingencia() + "\n"
+                        + "Clientes en espera: " + agendaDiaria.totalEnCola(),
+                "Agenda Diaria",
                 JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void atenderTurnoCola() {
         if (agendaDiaria.totalEnCola() == 0) {
             JOptionPane.showMessageDialog(vista,
-                    "No hay pacientes en espera en la Cola de Atención Diaria.\nPresione 'Cargar Cola Agenda' para sincronizar.",
-                    "Cola Vacía",
+                    "No hay clientes en espera en la cola de atencion.\nPresione 'Generar Agenda (Cola)' o cambie la fecha.",
+                    "Cola Vacia",
                     JOptionPane.WARNING_MESSAGE);
             return;
         }
@@ -1755,14 +1729,16 @@ public class Controlador implements ActionListener {
         String procedimiento = (atendido.getTipoDeAtencion() != null && !atendido.getTipoDeAtencion().isEmpty())
                 ? atendido.getTipoDeAtencion().get(0)
                 : "Diagnostico";
+        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm");
 
         JOptionPane.showMessageDialog(vista,
-                "🔔 ATENDIENDO TURNO DE LA AGENDA (COLA - POLL):\n\n"
-                        + "Cédula: " + atendido.getCedula() + "\n"
+                "ATENDIENDO CLIENTE:\n\n"
+                        + "Hora cita: " + sdf.format(atendido.getFechaCita()) + "\n"
+                        + "Cedula: " + atendido.getCedula() + "\n"
                         + "Nombre: " + atendido.getNombre() + "\n"
                         + "Procedimiento: " + procedimiento + "\n\n"
-                        + "Turnos restantes en cola: " + agendaDiaria.totalEnCola(),
-                "Turno Atendido",
+                        + "Clientes restantes en la cola: " + agendaDiaria.totalEnCola(),
+                "Cliente Atendido",
                 JOptionPane.INFORMATION_MESSAGE);
     }
 }

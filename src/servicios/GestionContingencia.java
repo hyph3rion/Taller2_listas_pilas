@@ -1,78 +1,95 @@
 package servicios;
 
+import java.io.FileWriter;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayDeque;
-import java.util.Comparator;
-import java.util.Deque;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
+
+import estructuras.Pila;
 import model.Cliente;
 
 public class GestionContingencia {
 
-    public Deque<Cliente> generarPilaUrgencias(List<Cliente> clientes) {
-        Deque<Cliente> pilaContingencia = new ArrayDeque<>();
+    public static final String ARCHIVO_INFORME = "informe_pila_contingencia.txt";
 
+    private final SimpleDateFormat formatoFecha = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+
+    public Pila<Cliente> generarPilaUrgencias(List<Cliente> clientes) {
+        Pila<Cliente> pila = new Pila<>();
         if (clientes == null || clientes.isEmpty()) {
-            return pilaContingencia;
+            return pila;
         }
 
-        List<Cliente> filtrados = clientes.stream()
-            .filter(Cliente::isUrgente)
-            .sorted(Comparator
-                .comparing(Cliente::esExtraccion).reversed()
-                .thenComparing((Cliente c) -> c.getFechaCita() != null ? c.getFechaCita() : new java.util.Date()).reversed()
-            )
-            .collect(Collectors.toList());
-
-        for (Cliente c : filtrados) {
-            pilaContingencia.push(c);
+        List<Cliente> seleccionados = new ArrayList<>();
+        for (Cliente c : clientes) {
+            if (c != null && c.esExtraccion() && c.isUrgente() && c.getFechaCita() != null) {
+                seleccionados.add(c);
+            }
         }
 
-        return pilaContingencia;
+        ordenarPorFechaAscendente(seleccionados);
+
+        for (int i = seleccionados.size() - 1; i >= 0; i--) {
+            pila.apilar(seleccionados.get(i));
+        }
+        return pila;
     }
 
-    public String generarReportePila(Deque<Cliente> pila, String nombreConsultorio) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("================================================================================\n");
-        sb.append("         INFORME DE CONTINGENCIA - LLAMADAS PRIORITARIAS (EXTRACCIONES)        \n");
-        if (nombreConsultorio != null && !nombreConsultorio.trim().isEmpty()) {
-            sb.append("         Origen: ").append(nombreConsultorio).append("\n");
+    private void ordenarPorFechaAscendente(List<Cliente> lista) {
+        for (int i = 1; i < lista.size(); i++) {
+            Cliente actual = lista.get(i);
+            int j = i - 1;
+            while (j >= 0 && lista.get(j).getFechaCita().after(actual.getFechaCita())) {
+                lista.set(j + 1, lista.get(j));
+                j--;
+            }
+            lista.set(j + 1, actual);
         }
-        sb.append("================================================================================\n");
-        sb.append(String.format("%-6s %-10s %-20s %-16s %-14s %-10s\n", "ORDEN", "CEDULA", "PACIENTE", "FECHA CITA", "PROCEDIMIENTO", "PRIORIDAD"));
-        sb.append("--------------------------------------------------------------------------------\n");
+    }
 
-        if (pila == null || pila.isEmpty()) {
-            sb.append("No hay pacientes con citas urgentes de extraccion pendientes.\n");
+    public String generarReportePila(Pila<Cliente> pila, String nombreConsultorio) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("==========================================================================================\n");
+        sb.append("        INFORME PLAN DE CONTINGENCIA - EXTRACCIONES DENTALES URGENTES (PILA)\n");
+        if (nombreConsultorio != null && !nombreConsultorio.trim().isEmpty()) {
+            sb.append("        Consultorio: ").append(nombreConsultorio).append("\n");
+        }
+        sb.append("        Generado: ").append(formatoFecha.format(new java.util.Date())).append("\n");
+        sb.append("        Orden: fecha de cita de la mas cercana a la mas lejana\n");
+        sb.append("==========================================================================================\n");
+        sb.append(String.format("%-6s %-12s %-22s %-12s %-17s %-11s %-9s\n",
+                "ORDEN", "CEDULA", "PACIENTE", "TELEFONO", "FECHA CITA", "ATENCION", "PRIORIDAD"));
+        sb.append("------------------------------------------------------------------------------------------\n");
+
+        if (pila == null || pila.estaVacia()) {
+            sb.append("No hay clientes con citas de extraccion urgentes pendientes.\n");
             return sb.toString();
         }
 
-        Deque<Cliente> copiaPila = new ArrayDeque<>(pila);
-        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm");
-
-        int ordenLlamada = 1;
-        while (!copiaPila.isEmpty()) {
-            Cliente c = copiaPila.pop();
-            String fechaStr = c.getFechaCita() != null ? sdf.format(c.getFechaCita()) : "Sin fecha";
-            String procStr = (c.getTipoDeAtencion() != null && !c.getTipoDeAtencion().isEmpty())
-                    ? c.getTipoDeAtencion().get(0) : "Extraccion";
-
-            sb.append(String.format("#%-5d %-10d %-20s %-16s %-14s %-10s\n",
-                ordenLlamada++,
-                c.getCedula(),
-                c.getNombre(),
-                fechaStr,
-                procStr,
-                c.getPrioridad()
-            ));
+        int orden = 1;
+        for (Cliente c : pila.recorrer()) {
+            sb.append(String.format("%-6d %-12d %-22s %-12d %-17s %-11s %-9s\n",
+                    orden++,
+                    c.getCedula(),
+                    c.getNombre(),
+                    c.getTelefono(),
+                    formatoFecha.format(c.getFechaCita()),
+                    c.getTipoDeAtencion().get(0),
+                    c.getPrioridad()));
         }
-        sb.append("================================================================================\n");
-        sb.append("Total urgencias en pila: ").append(pila.size()).append("\n");
+        sb.append("==========================================================================================\n");
+        sb.append("Total clientes en la pila: ").append(pila.tamano()).append("\n");
+        sb.append("Siguiente a llamar (cima): ").append(pila.verCima().getNombre()).append("\n");
         return sb.toString();
     }
 
-    public String generarReportePila(Deque<Cliente> pila) {
-        return generarReportePila(pila, null);
+    public boolean guardarInforme(String contenido) {
+        try (FileWriter fw = new FileWriter(ARCHIVO_INFORME, false)) {
+            fw.write(contenido);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
     }
 }
