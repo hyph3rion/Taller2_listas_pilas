@@ -269,7 +269,7 @@ public class Controlador implements ActionListener {
             Cliente current = list.get(i);
             double currentFee = getClienteTotalFee(current);
             int j = i - 1;
-            while (j >= 0 && getClienteTotalFee(list.get(j)) > currentFee) {
+            while (j >= 0 && getClienteTotalFee(list.get(j)) < currentFee) {
                 list.set(j + 1, list.get(j));
                 j--;
             }
@@ -642,6 +642,9 @@ public class Controlador implements ActionListener {
                         String attentionType = (!cli.getTipoDeAtencion().isEmpty())
                                 ? cli.getTipoDeAtencion().get(0)
                                 : "Diagnostico";
+                        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+                        String fechaStr = cli.getFechaCita() != null ? sdf.format(cli.getFechaCita()) : "Sin fecha";
+                        double valorTotal = getClienteTotalFee(cli);
                         String detalle = "=== DATOS DEL PACIENTE ===\n\n"
                                 + "Cédula: " + cli.getCedula() + "\n"
                                 + "Nombre: " + cli.getNombre() + "\n"
@@ -649,7 +652,9 @@ public class Controlador implements ActionListener {
                                 + "Tipo de Cliente: " + clientType + "\n"
                                 + "Atención Solicitada: " + attentionType + "\n"
                                 + "Cantidad Procedimientos: " + cli.getCantidad() + "\n"
-                                + "Fecha Cita: " + cli.getFechaCita() + "\n";
+                                + "Prioridad de Atención: " + cli.getPrioridad() + "\n"
+                                + "Fecha Cita: " + fechaStr + "\n"
+                                + "Valor Total a Pagar: $" + String.format("%,.0f", valorTotal) + "\n";
                         vista.getPanelVista().getVistaResultados().setText(detalle);
                     } else {
                         JOptionPane.showMessageDialog(vista, "Paciente no encontrado con cédula: " + cedula);
@@ -1298,7 +1303,7 @@ public class Controlador implements ActionListener {
             return;
         }
 
-        Cliente cli = cons.getConsultas().get(codigoAtender);
+        Cliente cli = cons.getConsultas().remove(codigoAtender);
         consultorioCrud.actualizarConsultorio(cons);
         this.consultorioActual = cons;
         renderOfficeDetails(cons);
@@ -1667,21 +1672,27 @@ public class Controlador implements ActionListener {
         }
 
         Cliente llamado = pilaContingenciaActual.desapilar();
+        marcarCitaAtendidaEnConsultorio(llamado);
 
         String origen = obtenerNombreOrigenContingencia();
         vista.getPanelContingencia().getVistaPilaReporte()
                 .setText(planContingencia.generarReportePila(pilaContingenciaActual, origen));
 
+        actualizarColaSilencioso();
+
         SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+        String fecha = llamado.getFechaCita() != null ? sdf.format(llamado.getFechaCita()) : "Sin fecha";
+        String atencion = (llamado.getTipoDeAtencion() != null && !llamado.getTipoDeAtencion().isEmpty())
+                ? llamado.getTipoDeAtencion().get(0) : "Extraccion";
 
         JOptionPane.showMessageDialog(vista,
                 "LLAMANDO AL CLIENTE:\n\n"
                         + "Cedula: " + llamado.getCedula() + "\n"
                         + "Nombre: " + llamado.getNombre() + "\n"
                         + "Telefono: " + llamado.getTelefono() + "\n"
-                        + "Atencion: " + llamado.getTipoDeAtencion().get(0) + "\n"
+                        + "Atencion: " + atencion + "\n"
                         + "Prioridad: " + llamado.getPrioridad() + "\n"
-                        + "Fecha Cita: " + sdf.format(llamado.getFechaCita()) + "\n\n"
+                        + "Fecha Cita: " + fecha + "\n\n"
                         + "Clientes pendientes en la pila: " + pilaContingenciaActual.tamano(),
                 "Llamado Prioritario",
                 JOptionPane.INFORMATION_MESSAGE);
@@ -1722,23 +1733,80 @@ public class Controlador implements ActionListener {
         }
 
         Cliente atendido = agendaDiaria.atenderSiguiente();
+        marcarCitaAtendidaEnConsultorio(atendido);
 
         String origen = obtenerNombreOrigenContingencia();
         vista.getPanelContingencia().getVistaColaReporte().setText(agendaDiaria.generarReporteCola(origen));
+
+        if (pilaContingenciaActual != null && !pilaContingenciaActual.estaVacia()) {
+            removerClienteDePila(atendido.getCedula());
+            vista.getPanelContingencia().getVistaPilaReporte()
+                    .setText(planContingencia.generarReportePila(pilaContingenciaActual, origen));
+        }
 
         String procedimiento = (atendido.getTipoDeAtencion() != null && !atendido.getTipoDeAtencion().isEmpty())
                 ? atendido.getTipoDeAtencion().get(0)
                 : "Diagnostico";
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm");
+        String hora = atendido.getFechaCita() != null ? sdf.format(atendido.getFechaCita()) : "--:--";
 
         JOptionPane.showMessageDialog(vista,
                 "ATENDIENDO CLIENTE:\n\n"
-                        + "Hora cita: " + sdf.format(atendido.getFechaCita()) + "\n"
+                        + "Hora cita: " + hora + "\n"
                         + "Cedula: " + atendido.getCedula() + "\n"
                         + "Nombre: " + atendido.getNombre() + "\n"
                         + "Procedimiento: " + procedimiento + "\n\n"
                         + "Clientes restantes en la cola: " + agendaDiaria.totalEnCola(),
                 "Cliente Atendido",
                 JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    private void marcarCitaAtendidaEnConsultorio(Cliente cliente) {
+        if (cliente == null) return;
+        List<Consultorio> consultorios = consultorioCrud.listarTodos();
+        for (Consultorio c : consultorios) {
+            String codigoEncontrado = null;
+            for (Map.Entry<String, Cliente> entry : c.getConsultas().entrySet()) {
+                if (entry.getValue().getCedula() == cliente.getCedula()) {
+                    codigoEncontrado = entry.getKey();
+                    break;
+                }
+            }
+            if (codigoEncontrado != null) {
+                c.getConsultas().remove(codigoEncontrado);
+                c.removerDeCola(codigoEncontrado);
+                consultorioCrud.actualizarConsultorio(c);
+                if (this.consultorioActual != null && this.consultorioActual.getNit() == c.getNit()) {
+                    this.consultorioActual = c;
+                } else if (this.consultorioActual == null) {
+                    this.consultorioActual = c;
+                }
+                break;
+            }
+        }
+        if (this.consultorioActual != null) {
+            Consultorio recargado = consultorioCrud.buscarConsultorio(this.consultorioActual.getNit());
+            if (recargado != null) {
+                this.consultorioActual = recargado;
+            }
+            renderOfficeDetails(this.consultorioActual);
+        }
+        vista.getPanelConsultas().actualizarComboConsultorios(consultorioCrud.listarTodos());
+    }
+
+    private void removerClienteDePila(int cedula) {
+        if (pilaContingenciaActual == null || pilaContingenciaActual.estaVacia()) {
+            return;
+        }
+        Pila<Cliente> aux = new Pila<>();
+        while (!pilaContingenciaActual.estaVacia()) {
+            Cliente c = pilaContingenciaActual.desapilar();
+            if (c.getCedula() != cedula) {
+                aux.apilar(c);
+            }
+        }
+        while (!aux.estaVacia()) {
+            pilaContingenciaActual.apilar(aux.desapilar());
+        }
     }
 }

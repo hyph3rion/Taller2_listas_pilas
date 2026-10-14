@@ -93,8 +93,15 @@ public class Cliente implements Serializable {
  }
 
  public boolean isUrgente() {
-	return prioridadAtencion != null && prioridadAtencion.length > 0 
-			&& "Urgente".equalsIgnoreCase(prioridadAtencion[0]);
+	if (prioridadAtencion == null || prioridadAtencion.length == 0) {
+		return false;
+	}
+	for (String p : prioridadAtencion) {
+		if (p != null && p.trim().toLowerCase().contains("urgent")) {
+			return true;
+		}
+	}
+	return false;
  }
 
  public String getPrioridad() {
@@ -112,7 +119,15 @@ public class Cliente implements Serializable {
 	if (tipoDeAtencion == null || tipoDeAtencion.isEmpty()) {
 		return false;
 	}
-	return tipoDeAtencion.get(0).trim().toLowerCase().startsWith("extracc");
+	for (String t : tipoDeAtencion) {
+		if (t != null) {
+			String s = t.trim().toLowerCase();
+			if (s.contains("extrac")) {
+				return true;
+			}
+		}
+	}
+	return false;
  }
 
  @Override

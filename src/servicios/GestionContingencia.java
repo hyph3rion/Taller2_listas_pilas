@@ -23,7 +23,10 @@ public class GestionContingencia {
 
         List<Cliente> seleccionados = new ArrayList<>();
         for (Cliente c : clientes) {
-            if (c != null && c.esExtraccion() && c.isUrgente() && c.getFechaCita() != null) {
+            if (c != null && c.esExtraccion() && c.isUrgente()) {
+                if (c.getFechaCita() == null) {
+                    c.setFechaCita(new java.util.Date());
+                }
                 seleccionados.add(c);
             }
         }
